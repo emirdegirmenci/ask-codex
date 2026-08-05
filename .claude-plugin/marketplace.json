@@ -1,0 +1,30 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "ask-codex",
+  "description": "A Claude Code plugin that turns OpenAI Codex into a teammate: delegate reviews, plans, refactors, and implementations to Codex over the local codex MCP server, with the model + reasoning effort matched to the task.",
+  "owner": {
+    "name": "Emir Degirmenci",
+    "url": "https://github.com/emirdegirmenci"
+  },
+  "plugins": [
+    {
+      "name": "ask-codex",
+      "description": "Delegate coding work from Claude Code to OpenAI Codex — review, plan, refactor, implement, or second-opinion — with the right model + effort per task. Includes the codex-teammate subagent for multi-turn loops.",
+      "version": "1.0.0",
+      "source": "./",
+      "category": "Developer Tools",
+      "keywords": [
+        "codex",
+        "openai-codex",
+        "mcp",
+        "code-review",
+        "second-opinion",
+        "ai-pair-programming"
+      ],
+      "author": {
+        "name": "Emir Degirmenci",
+        "url": "https://github.com/emirdegirmenci"
+      }
+    }
+  ]
+}

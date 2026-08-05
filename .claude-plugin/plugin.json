@@ -1,0 +1,27 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "ask-codex",
+  "description": "Delegate coding work from Claude Code to OpenAI Codex through the local first-party codex MCP server — review, plan, refactor, implement, or get a second opinion, with the right model + reasoning effort picked for the task.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Emir Degirmenci",
+    "url": "https://github.com/emirdegirmenci"
+  },
+  "homepage": "https://github.com/emirdegirmenci/ask-codex",
+  "repository": "https://github.com/emirdegirmenci/ask-codex",
+  "license": "MIT",
+  "keywords": [
+    "codex",
+    "openai-codex",
+    "claude-code",
+    "claude-code-plugin",
+    "mcp",
+    "code-review",
+    "second-opinion",
+    "ai-pair-programming",
+    "agent-delegation",
+    "developer-tools"
+  ],
+  "skills": "./skills/",
+  "agents": "./agents/"
+}
