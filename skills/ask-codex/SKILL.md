@@ -1,6 +1,14 @@
 ---
 name: ask-codex
-description: Use when the user wants a second opinion, code review, plan, or implementation from OpenAI Codex — triggers include "ask codex", "codex'e sor", "codex ne diyor", "let codex review/plan/refactor", "second opinion", "get codex to implement X". Also fires proactively as an OFFER (never a silent call) on high-stakes engineering decisions: architecture choices, irreversible/high-blast-radius changes, stubborn deep-debugging, a genuine fork between two strong approaches, or a security-critical diff. Delegates coding work to the local first-party codex MCP server (OpenAI Codex CLI running as codex mcp-server, stdio). Runs entirely locally; no third-party bridge code.
+description: >-
+  Use when the user wants a second opinion, code review, plan, or implementation from OpenAI Codex
+  — triggers include "ask codex", "codex'e sor", "codex ne diyor", "let codex
+  review/plan/refactor", "second opinion", "get codex to implement X". Also fires proactively as
+  an OFFER (never a silent call) on high-stakes engineering decisions: architecture choices,
+  irreversible/high-blast-radius changes, stubborn deep-debugging, a genuine fork between two
+  strong approaches, or a security-critical diff. Delegates coding work to the local first-party
+  codex MCP server (OpenAI Codex CLI running as codex mcp-server, stdio). Runs entirely locally;
+  no third-party bridge code.
 ---
 
 # ask-codex — delegate to OpenAI Codex, natively
