@@ -1,32 +1,23 @@
 # Codex models reference
 
-> **Generated file — do not hand-edit.** Regenerate with `python scripts/sync-models.py`.
-> Source: `$CODEX_HOME/models_cache.json` · fetched `2026-08-05T06:23:54.147234200Z` · Codex CLI `0.146.0`.
+> Routing policy for ask-codex. The plugin intentionally uses only the current GPT-6 Codex family.
 
-In a `mcp__codex__codex` / `codex-reply` call: pass the slug as `model`, and the reasoning effort as `config={"model_reasoning_effort": "<effort>"}`.
+Pass the slug as `model`, and reasoning effort as
+`config={"model_reasoning_effort": "<effort>"}`.
 
-## Available models
+## Allowed models
 
-| slug | recommended for | default effort | supported efforts |
+| slug | use it for | routing default | supported efforts |
 |---|---|---|---|
-| `gpt-5.6-sol` | Hardest coding, architecture, deep debugging, whole-repo analysis | `medium` | `low`, `medium`, `high`, `xhigh`, `max`, `ultra` |
-| `gpt-5.6-terra` | Everyday coding; balanced quality / speed / cost | `medium` | `low`, `medium`, `high`, `xhigh`, `max`, `ultra` |
-| `gpt-5.6-luna` | Fast, repetitive, well-defined, high-volume work | `medium` | `low`, `medium`, `high`, `xhigh`, `max` |
-| `gpt-5.5` | Previous-gen frontier: complex coding, research, real-world work | `xhigh` | `low`, `medium`, `high`, `xhigh` |
-| `gpt-5.4` | Economical general coding | `medium` | `low`, `medium`, `high`, `xhigh` |
-| `gpt-5.4-mini` | Small, fast, cost-efficient simple tasks + subagent work | `medium` | `low`, `medium`, `high`, `xhigh` |
+| `gpt-6-luna` | **Default.** Code review, plan critique/approval, focused debugging, well-scoped coding | `high` | `none`, `low`, `medium`, `high`, `xhigh`, `max` |
+| `gpt-6-sol` | Architecture, security, subtle cross-cutting bugs, migrations, whole-repo/high-blast-radius analysis | `high` | `none`, `low`, `medium`, `high`, `xhigh`, `max` |
+| `gpt-6-astra` | Exceptional escalation when Sol/high is insufficient or the task is unusually hard/end-to-end | `medium` | `low`, `medium`, `high`, `xhigh`, `max` |
 
-## Presets
+## Routing policy
 
-| preset | model | effort |
-|---|---|---|
-| **strongest** | `gpt-5.6-sol` | `high` |
-| **maximum_depth** | `gpt-5.6-sol` | `max` |
-| **balanced** | `gpt-5.6-terra` | `medium` |
-| **fast_and_cheap** | `gpt-5.6-luna` | `medium` |
-
-## Rules
-
-- Never pass an effort a model does not list above — the call fails.
-- Only the slugs in the table exist on this seat. Do not invent slugs (no `-codex-spark`, no `-preview`, etc.).
-- If a model you expect is missing, the seat changed — rerun `sync-models.py` to refresh.
+1. Start with **`gpt-6-luna/high`** for normal review and plan validation.
+2. Use **`gpt-6-sol/high`** when correctness risk is high or reasoning spans architecture/security/many components.
+3. Use **`gpt-6-astra/medium`** only for the hardest cases, or after a Sol pass is still inconclusive.
+4. Raise effort before raising model when sensible: `high` → `xhigh`; reserve `max` for exceptional cases.
+5. Do **not** use GPT-5.x, Terra, or legacy aliases in this plugin.
+6. If an allowed model is unavailable on the user's seat, report it plainly instead of silently substituting a legacy model.

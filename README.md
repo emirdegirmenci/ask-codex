@@ -4,131 +4,119 @@
 
 **Make OpenAI Codex a teammate inside Claude Code.**
 
-Delegate reviews, plans, refactors, and implementations to Codex over the local
-first-party `codex` MCP server — with the model + reasoning effort matched to the task,
-and a subagent that keeps multi-turn loops out of your main context.
+Delegate reviews, plan validation, refactors, and implementations to Codex over the local
+first-party `codex` MCP server — with a small GPT-6 routing policy and optional multi-turn loops.
 
 [![Claude Code Plugin](https://img.shields.io/badge/Claude_Code-Plugin-D97757?logo=anthropic&logoColor=white)](https://docs.claude.com/en/docs/claude-code)
 [![OpenAI Codex](https://img.shields.io/badge/OpenAI-Codex-412991?logo=openai&logoColor=white)](https://developers.openai.com/codex/cli/)
 [![MCP](https://img.shields.io/badge/protocol-MCP-1f6feb)](https://modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-1.0.0-blue)](https://github.com/emirdegirmenci/ask-codex/releases)
-
-`#claude-code` · `#codex` · `#mcp` · `#ai-pair-programming` · `#code-review` · `#developer-tools`
+[![Version](https://img.shields.io/badge/version-1.1.0-blue)](https://github.com/emirdegirmenci/ask-codex/releases)
 
 </div>
 
 ---
 
-## Why
+## What it does
 
-Claude Code is great. So is Codex. They're better together — one drafts, the other checks;
-one plans, the other stress-tests. **ask-codex** teaches Claude *when* to bring Codex in,
-*which* Codex model + effort fits the job, and *how* to phrase the hand-off so the answer
-comes back tight instead of as a wall of tokens.
+ask-codex teaches Claude Code when to bring Codex in, which model to use, and how to keep the
+handoff compact. It is optimized for the two jobs this plugin is used for most:
 
-Everything runs **locally on your own Codex/ChatGPT seat** through OpenAI's first-party
-`codex mcp-server`. There is **no third-party bridge** and no key sharing.
+- **code review**
+- **plan critique / approval**
 
-## What you get
+It also keeps the `codex-teammate` subagent for multi-turn workflows such as
+implement → self-review → fix.
 
-| Piece | What it does |
-|---|---|
-| **`ask-codex` skill** | Fires on "ask codex", "second opinion", "let codex review/plan/refactor" — and **proactively offers** Codex on high-stakes calls (architecture, irreversible changes, stubborn bugs, security-critical diffs). Never a silent call: it offers, you decide. |
-| **`codex-teammate` subagent** | Runs multi-turn Codex loops (implement → self-review → fix) in an isolated context and returns only the outcome. |
-| **`scripts/sync-models.py`** | Regenerates the model list from Codex's own cache so the skill never suggests a model that doesn't exist or an effort a model can't do. |
+Everything runs locally on your own Codex/ChatGPT seat through OpenAI's first-party
+`codex mcp-server`.
 
-## Requirements
+## Model routing
 
-- [Claude Code](https://docs.claude.com/en/docs/claude-code)
-- [OpenAI Codex CLI](https://developers.openai.com/codex/cli/) (`codex`), signed in to your seat
-- Python 3.9+ (only for the optional `sync-models.py` maintenance script)
+The plugin intentionally uses only the current GPT-6 routing set:
+
+| Task | Model | Effort |
+|---|---|---|
+| Normal code review | `gpt-6-luna` | `high` |
+| Plan critique / approval | `gpt-6-luna` | `high` |
+| Focused debugging / well-scoped coding | `gpt-6-luna` | `high` |
+| Architecture / security / migrations / broad cross-cutting reasoning | `gpt-6-sol` | `high` |
+| Exceptional escalation | `gpt-6-astra` | `medium` |
+
+The normal default is **`gpt-6-luna/high`**. The plugin escalates to Sol only when the
+correctness risk or reasoning scope justifies it, and reserves Astra for genuinely hard cases.
+
+GPT-5.x, Terra, and legacy aliases are deliberately excluded from routing.
+
+## Multi-turn stays supported
+
+One-shot review and plan requests call Codex directly.
+
+For workflows that genuinely benefit from multiple turns, Claude can use the
+`codex-teammate` subagent:
+
+- implement → self-review → fix
+- iterative plan refinement
+- deep-review follow-ups
+
+The agent uses the same routing policy and keeps a model stable within a conversation.
+If escalation is needed, it starts a fresh stronger conversation rather than bouncing models
+mid-thread.
 
 ## Install
 
-### 1. Register Codex as an MCP server for Claude Code
-
-ask-codex talks to Codex through the MCP server that ships with the Codex CLI:
+### 1. Register Codex MCP
 
 ```bash
 claude mcp add codex -- codex mcp-server
 ```
 
-(On Windows, if `codex` is a shim: `claude mcp add codex -- cmd /c codex mcp-server`.)
+On Windows, if `codex` is a shim:
 
-Verify it's connected with `/mcp` inside Claude Code — you should see the `codex` server
-exposing `codex` and `codex-reply` tools.
+```bash
+claude mcp add codex -- cmd /c codex mcp-server
+```
 
-### 2. Add the plugin
-
-From inside Claude Code:
+### 2. Install the plugin
 
 ```
 /plugin marketplace add emirdegirmenci/ask-codex
 /plugin install ask-codex@ask-codex
 ```
 
-That's it. The skill and the `codex-teammate` subagent are now available.
+## Examples
 
-> A git release tag is **not** required to install — a Claude Code marketplace is just a repo
-> with `.claude-plugin/marketplace.json`. Tags/releases (like `v1.0.0`) are provided for
-> version tracking and discoverability.
+- *"Ask Codex to review my uncommitted diff."* → `gpt-6-luna/high`, read-only.
+- *"Get Codex to challenge and approve this plan."* → `gpt-6-luna/high`, read-only.
+- *"Review this auth migration architecture."* → `gpt-6-sol/high`, read-only.
+- *"Have Codex implement this, review itself, then fix confirmed issues."* → multi-turn subagent.
 
-## Use it
+## Model list maintenance
 
-Just talk to Claude Code:
-
-- *"Ask Codex to review my uncommitted diff."* → read-only review, findings ranked by severity.
-- *"Get a second opinion on this plan from Codex."* → verdict + reasoning in ≤10 lines.
-- *"Let Codex refactor `parser.py` to remove the duplication."* → Codex writes, returns the diff.
-- *"Have Codex implement the retry logic and self-review it."* → multi-turn loop via the subagent.
-
-On a heavy call you didn't ask about, Claude will *offer*:
-
-> *"This is an architecture decision with real blast radius — want a Codex second opinion too?
-> (`gpt-5.6-sol`/`high`, read-only.)"*
-
-You say yes or no. It never spends your Codex seat silently.
-
-## Picking the model + effort
-
-The skill matches the model to the weight of the work:
-
-| Task | Model | Effort |
-|---|---|---|
-| Hard / architecture / deep debugging / whole-repo | `gpt-5.6-sol` | `high` (→ `max`/`ultra` for the hardest) |
-| Everyday coding, balanced | `gpt-5.6-terra` | `medium` |
-| Fast, simple, repetitive | `gpt-5.6-luna` | `medium` |
-
-The full, always-accurate list lives in
-[`skills/ask-codex/MODELS.md`](./skills/ask-codex/MODELS.md) — it's **generated** from the
-Codex CLI's own model cache, so it can't drift into suggesting models that aren't on your seat.
-
-### Keeping the model list fresh
-
-If OpenAI ships new Codex models (or your seat changes), refresh the list:
+`skills/ask-codex/MODELS.md` is generated from the local Codex model cache, but
+`scripts/sync-models.py` applies an explicit GPT-6 allowlist so refreshing the cache cannot
+silently reintroduce old models.
 
 ```bash
-python scripts/sync-models.py           # rewrite MODELS.md from your Codex cache
-python scripts/sync-models.py --check    # CI-friendly: exit 1 if MODELS.md is stale
+python scripts/sync-models.py
+python scripts/sync-models.py --check
 ```
 
-It reads `$CODEX_HOME/models_cache.json` (default `~/.codex/models_cache.json`). If that cache
-isn't present, the committed `MODELS.md` is kept as the shipped fallback.
+If an approved model is unavailable on the current seat, the plugin reports that instead of
+silently falling back to a legacy model.
 
-## How it stays cheap
+## Token discipline
 
-Delegation only saves tokens if the hand-off is thin both ways. The skill enforces four habits:
-pass **paths + `cwd`** (Codex reads the repo itself, Claude never loads the files), **bound the
-reply** ("diff only", "findings only"), prefer **`read-only`** for review/plan/consult, and run
-heavy multi-turn work in the **`codex-teammate`** subagent so the chatter never hits your main
-context.
+- Pass `cwd` + paths instead of pasting repository contents.
+- Keep review/plan/consult read-only.
+- Bound Codex replies.
+- Use direct one-shot calls by default.
+- Use the multi-turn subagent only when another turn materially improves the result.
 
 ## Trust boundary
 
-`read-only` inspects; `workspace-write` lets Codex edit files in `cwd`; `danger-full-access`
-removes the sandbox and is never used unless you explicitly ask. Central policy lives in your
-`$CODEX_HOME/config.toml`.
+`read-only` inspects. `workspace-write` allows edits in `cwd`.
+`danger-full-access` is never used unless explicitly requested.
 
 ## License
 
