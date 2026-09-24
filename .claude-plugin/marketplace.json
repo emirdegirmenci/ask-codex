@@ -10,7 +10,7 @@
     {
       "name": "ask-codex",
       "description": "Delegate coding work from Claude Code to OpenAI Codex with GPT-6 Luna by default, Sol for high-risk reasoning, and multi-turn codex-teammate loops when needed.",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "source": "./",
       "category": "Developer Tools",
       "keywords": [
