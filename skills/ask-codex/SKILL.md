@@ -1,166 +1,177 @@
 ---
 name: ask-codex
-description: Use when the user wants a second opinion, code review, plan, or implementation from OpenAI Codex — triggers include "ask codex", "codex'e sor", "codex ne diyor", "let codex review/plan/refactor", "second opinion", "get codex to implement X". Also fires proactively as an OFFER (never a silent call) on high-stakes engineering decisions: architecture choices, irreversible/high-blast-radius changes, stubborn deep-debugging, a genuine fork between two strong approaches, or a security-critical diff. Delegates coding work to the local first-party `codex` MCP server (OpenAI Codex CLI running as `codex mcp-server`, stdio). Runs entirely locally; no third-party bridge code.
+description: Use when the user wants a second opinion, code review, plan, or implementation from OpenAI Codex — triggers include "ask codex", "codex'e sor", "codex ne diyor", "let codex review/plan/refactor", "second opinion", "get codex to implement X". Also fires proactively as an OFFER (never a silent call) on high-stakes engineering decisions: architecture choices, irreversible/high-blast-radius changes, stubborn deep-debugging, a genuine fork between two strong approaches, or a security-critical diff. Delegates coding work to the local first-party codex MCP server (OpenAI Codex CLI running as codex mcp-server, stdio). Runs entirely locally; no third-party bridge code.
 ---
 
 # ask-codex — delegate to OpenAI Codex, natively
 
 Claude and Codex are teammates. This skill defines **when** to hand work to Codex,
-**which model + effort** to use, and **how** to phrase the request so it comes back tight.
-Codex runs on the user's own Codex/ChatGPT seat through the local `codex` MCP server
-(`codex mcp-server`, first-party OpenAI). No third-party bridge is involved.
+**which current GPT-6 model + effort** to use, and **how** to keep the hand-off compact.
+Codex runs on the user's own Codex/ChatGPT seat through the local first-party
+`codex mcp-server`.
 
 ## Tools
 
-The `codex` MCP server exposes two tools. If they aren't loaded in the session yet, resolve
-them first with `ToolSearch("codex")`:
+Resolve the Codex MCP tools with `ToolSearch("codex")` when needed:
 
-- **`mcp__codex__codex`** — start a Codex task. Key params: `prompt` (required), `cwd`
-  (working directory — Codex reads the repo from here), `sandbox`
-  (`read-only` | `workspace-write` | `danger-full-access`), `model`, `approval-policy`,
-  and `config` (per-call overrides, e.g. reasoning effort).
-- **`mcp__codex__codex-reply`** — continue an existing Codex conversation by `conversationId`
-  + `prompt` (multi-turn without re-sending context).
+- **`mcp__codex__codex`** — start a task. Key params: `prompt`, `cwd`, `sandbox`,
+  `model`, `approval-policy`, and `config`.
+- **`mcp__codex__codex-reply`** — continue the same conversation by id + `prompt`.
 
-Policy defaults (sandbox, approval) live centrally in `$CODEX_HOME/config.toml`. Only override
-per call when the task needs it.
+Policy defaults live in `$CODEX_HOME/config.toml`. Override only when the task needs it.
 
-## Model + effort: match the work, then say what you picked
+## Model routing — automatic, small, opinionated
 
-Do **not** silently fall back to the config default, and do **not** stall the user with a bare
-"which model?". Match the model + reasoning effort to the weight of the task, then either apply
-it (stating your choice in one line) or offer 2–3 sensible candidates. **Only the slugs listed in
-[MODELS.md](MODELS.md) exist** — that file is generated from the Codex seat's own cache, so it is
-the source of truth. Never invent a slug or pass an effort a model does not support.
+Do not ask the user to choose a model unless they explicitly want to. Pick it automatically.
+Only use the three GPT-6 slugs in [MODELS.md](MODELS.md). **Never fall back to GPT-5.x,
+Terra, or another legacy model.**
 
-Quick map (full table + supported efforts in [MODELS.md](MODELS.md)):
+### Default
 
-- **Hard / architecture / deep debugging / whole-repo analysis** → `gpt-5.6-sol` at `high`
-  (step up to `max` or `ultra` for the truly hardest).
-- **Everyday coding, balanced quality / speed / cost** → `gpt-5.6-terra` at `medium`.
-- **Fast, simple, repetitive, well-defined** → `gpt-5.6-luna` at `medium`.
+For the plugin's most common jobs — **code review and plan critique/approval** — use:
 
-Say it in one line, e.g. *"This is heavy — asking with `gpt-5.6-sol`/`high`."* or offer a choice:
-*"`gpt-5.6-sol`/`high` (deep) or `gpt-5.6-terra`/`medium` (fast) — which one?"*. If the user already
-named a model + effort, use it directly and skip the question.
+**`gpt-6-luna` / `high`**
 
-Map the choice onto the call:
-- **model** → the `model` param (e.g. `model="gpt-5.6-sol"`).
-- **reasoning effort** → `config={"model_reasoning_effort": "high"}`.
+This is the normal default, not just the "cheap" fallback.
 
-If [MODELS.md](MODELS.md) looks stale (a model is missing, or a call rejects an effort), refresh it:
-`python scripts/sync-models.py`. It rewrites the table from `$CODEX_HOME/models_cache.json`.
+### Escalate to Sol
 
-## Proactively offering Codex (offer — never a silent call)
+Use **`gpt-6-sol` / `high`** when one or more apply:
 
-On high-stakes engineering moments, don't wait to be asked. Surface a **one-line offer** to bring
-in Codex as a second set of eyes, pre-picking a sensible model + effort. Offer when the moment is:
+- architecture or system-design decisions,
+- auth/security/permissions/secrets,
+- database schema changes or migrations,
+- subtle concurrency/state/distributed-system bugs,
+- broad refactors spanning several subsystems,
+- whole-repo reasoning with meaningful blast radius,
+- the first Luna review found uncertainty that needs a stronger second pass.
 
-- an **architecture / design** decision with lasting consequences,
-- an **irreversible or high-blast-radius** change (schema, auth, migrations, deletes, deploys),
-- a **stubborn bug** you've circled without a confirmed root cause,
-- a genuine **fork between two strong approaches** where a tie-breaker helps,
-- a **security-critical** diff or one touching secrets / public surfaces.
+### Escalate to Astra
 
-Example: *"This is an architecture call with real blast radius — want me to get a Codex second
-opinion too? (`gpt-5.6-sol`/`high`, read-only.)"* Then **wait for a yes**. Do not silently spend
-the user's Codex seat, and do not offer on trivial or well-understood work — a noisy offer is worse
-than none. This preserves the standing rule: **ask before calling; the user always decides.**
+Use **`gpt-6-astra` / `medium`** only when the task is exceptional:
+Sol/high was still inconclusive, the work is unusually difficult end-to-end, or the user
+explicitly asks for the strongest available model. Prefer raising an existing model to
+`xhigh` before spending Astra casually.
 
-## The five methods
+Supported efforts are listed in [MODELS.md](MODELS.md). Do not invent model names or efforts.
 
-Pick the method, then set `sandbox` + the return shape accordingly.
+Map the choice onto each start call:
 
-| Method | When | `sandbox` | Ask Codex to return |
+- `model="<slug>"`
+- `config={"model_reasoning_effort": "<effort>"}`
+
+Tell the user the selected model in one short line only when useful; don't turn model selection
+into a conversation tax.
+
+## Proactively offering Codex
+
+Offer a Codex second opinion on:
+
+- architecture/design with lasting consequences,
+- irreversible or high-blast-radius changes,
+- a stubborn bug without a confirmed root cause,
+- a genuine fork between strong approaches,
+- security-critical changes.
+
+Offer once, with the already-selected model, then wait for consent. Never silently spend the
+user's Codex allowance.
+
+## Methods
+
+| Method | When | sandbox | Return contract |
 |---|---|---|---|
 | **review** | second pair of eyes on a diff | `read-only` | findings only, ranked by severity |
-| **plan** | design / approach for a task | `read-only` | the plan only, numbered steps |
-| **refactor** | restructure existing code | `workspace-write` | the diff only |
-| **implement** | build a feature / fix | `workspace-write` | diff + ≤5-line summary |
-| **consult** | critique of Claude's own approach | `read-only` | verdict + reasoning, ≤10 lines |
+| **plan** | critique/approve a design or implementation plan | `read-only` | verdict, missed risks, concrete fixes |
+| **refactor** | restructure existing code | `workspace-write` | changed files + compact diff summary |
+| **implement** | build a feature/fix | `workspace-write` | changed files + ≤5-line summary |
+| **consult** | challenge Claude's approach | `read-only` | verdict + reasoning, ≤10 lines |
 
-## Writing the prompt: make Codex's job unambiguous
+## Prompt recipe
 
-A good Codex prompt has four parts, in order. Skipping any of them is where weak results come from:
+Every Codex prompt should contain:
 
-1. **Role + method** — one line naming what Codex is doing: *"Act as a reviewer."* /
-   *"You are implementing a fix."*
-2. **Concrete target** — the paths, the diff, the failing test, the exact error. Point at the repo,
-   don't describe it. *"Review the uncommitted changes in `src/auth/` (see `git diff`)."*
-3. **Definition of done** — the bar the answer must clear. *"Focus on correctness and security;
-   ignore style."* / *"Behavior must stay identical."*
-4. **Return contract** — the exact shape and size of the reply. *"Return only a severity-ranked
-   list. No praise, no summary, no restated code."*
+1. **Role + method** — reviewer, planner, implementer, etc.
+2. **Concrete target** — repo/path/diff/failing test. Prefer paths over pasted files.
+3. **Definition of done** — correctness/security/compatibility constraints.
+4. **Return contract** — exact small output shape.
 
-The single biggest quality lever is the return contract: an unconstrained Codex reply is a wall of
-text that lands back in Claude's context and costs tokens for nothing. Always bound it.
+For plan approval, ask Codex to **challenge the plan rather than rewrite it by default**:
+identify blockers, missing edge cases, unsafe assumptions, and only propose changes that matter.
 
-## Token discipline (this is where the savings come from)
+For review, prioritize correctness, security, regressions, data loss, race conditions, API/schema
+compatibility and missing tests. Do not waste tokens on praise or style nits unless asked.
 
-Delegating to Codex only saves tokens if you delegate **thin** and receive **thin**:
+## Token discipline
 
-1. **Pass paths + `cwd`, not file contents.** Codex reads the repo itself from `cwd`. Claude's
-   context never loads the files just to "hand them over".
-2. **Constrain the output** (return contract above). A bounded reply is a cheap reply.
-3. **Use `read-only` for review / plan / consult.** Safer and cheaper than write mode.
-4. **Heavy multi-turn → run in the `codex-teammate` subagent.** The back-and-forth stays in the
-   subagent's isolated context; only its final result returns to the main thread.
+1. Pass **cwd + paths**, not file contents, whenever Codex can read the repo itself.
+2. Keep returned output bounded.
+3. Review/plan/consult stay `read-only`.
+4. One-shot work should call Codex directly.
+5. **Multi-turn work stays supported**: use the `codex-teammate` subagent for
+   implement → self-review → fix, iterative plan refinement, or deep review follow-ups.
 
-## Summarize vs. pass raw
+## Multi-turn escalation
 
-Default: send Codex a **tight** instruction, not the whole conversation. **But when correctness
-depends on full fidelity** (a subtle bug, an exact error string, a spec that must not be
-paraphrased), pass the material **verbatim** — do not summarize. If the user says "don't summarize,
-give it as-is", honor it: put the raw text / diff / error into the `prompt` unchanged. Losing a
-detail to summarization is worse than spending the tokens.
+Keep the same model for a conversation unless there is a clear reason to escalate. A good loop is:
 
-## Sandbox = trust boundary
+- start with the routed model,
+- ask one focused follow-up using `codex-reply`,
+- if the result is still uncertain, escalate the **next fresh Codex conversation** to Sol or Astra
+  with a concise summary of the unresolved question.
 
-`read-only` inspects only. `workspace-write` lets Codex edit files in `cwd`. `danger-full-access`
-removes the sandbox entirely — never use it unless the user explicitly asks and trusts the repo.
-For anything that only inspects code (review / plan / consult), stay `read-only`.
+Do not bounce models every turn.
+
+## Raw vs summarized context
+
+Default to a tight instruction and repo paths. When correctness depends on exact material
+(error text, spec language, a small critical diff), pass it verbatim. User instructions such as
+"do not summarize" take precedence.
+
+## Sandbox boundary
+
+`read-only` for review/plan/consult. `workspace-write` only when edits are required.
+Never use `danger-full-access` unless the user explicitly requests it and understands the risk.
 
 ## Examples
 
-Each call carries the chosen `model` + `config.model_reasoning_effort`. The `<model>` / `<effort>`
-placeholders stand in for that choice.
-
-**Review the current diff (thin in, thin out):**
+**Review current diff — default route**
 ```
 mcp__codex__codex(
-  prompt="Act as a reviewer. In this repo, review the uncommitted changes (git diff).
-          Focus on correctness and security; ignore style. Return only a severity-ranked
-          list of findings — no praise, no summary, no restated code.",
+  prompt="Act as a code reviewer. Review the uncommitted diff in this repo.
+          Focus on correctness, regressions, security and missing tests.
+          Return only severity-ranked findings with file/line references.",
   cwd="<abs repo path>",
   sandbox="read-only",
-  model="<model>",
-  config={"model_reasoning_effort": "<effort>"})
+  model="gpt-6-luna",
+  config={"model_reasoning_effort": "high"})
 ```
 
-**Second opinion on Claude's plan (pass the plan raw):**
+**Critique / approve a plan — default route**
 ```
 mcp__codex__codex(
-  prompt="Critique this approach, given verbatim below. Where does it break? What did it miss?
-          Verdict + reasoning in ≤10 lines.\n\n<PLAN>\n...\n</PLAN>",
+  prompt="Act as a skeptical senior engineer. Critique the plan below against this repo.
+          Identify blockers, missed edge cases and unsafe assumptions. If it is sound,
+          say APPROVE and list only residual risks. Keep the answer under 12 lines.
+          <PLAN>...</PLAN>",
   cwd="<abs repo path>",
   sandbox="read-only",
-  model="<model>",
-  config={"model_reasoning_effort": "<effort>"})
+  model="gpt-6-luna",
+  config={"model_reasoning_effort": "high"})
 ```
 
-**Delegate a refactor (Codex writes, returns the diff):**
+**High-blast-radius architecture review — Sol**
 ```
 mcp__codex__codex(
-  prompt="You are refactoring <file> to <goal>. Behavior must stay identical.
-          Return the diff only.",
+  prompt="Review this architecture change across the repository. Focus on failure modes,
+          migration/rollback, security boundaries and compatibility. Findings only.",
   cwd="<abs repo path>",
-  sandbox="workspace-write",
-  model="<model>",
-  config={"model_reasoning_effort": "<effort>"})
+  sandbox="read-only",
+  model="gpt-6-sol",
+  config={"model_reasoning_effort": "high"})
 ```
 
-## Relationship to the subagent
+## Relationship to codex-teammate
 
-For a one-shot call, invoke the tool directly from the main thread. For anything that will take
-several Codex turns (iterate on a plan, implement → self-review → fix), dispatch the
-**`codex-teammate`** subagent instead — it owns the loop and returns only the outcome.
+Keep **`codex-teammate`** for multi-turn Codex loops. It must apply this same routing policy
+rather than requiring the caller to manually choose a model every time. One-shot review/plan
+requests should remain direct to avoid unnecessary subagent overhead.
