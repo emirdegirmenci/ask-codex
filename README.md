@@ -27,8 +27,9 @@ handoff compact. It is optimized for the two jobs this plugin is used for most:
 It also keeps the `codex-teammate` subagent for multi-turn workflows such as
 implement → self-review → fix.
 
-Everything runs locally on your own Codex/ChatGPT seat: Claude calls OpenAI's first-party
-`codex exec` CLI through Bash. There is no MCP server and no third-party bridge.
+Claude runs OpenAI's first-party `codex exec` CLI locally through Bash, on your own Codex/ChatGPT
+seat (inference itself is done by OpenAI's hosted models). There is no MCP server and no
+third-party bridge.
 
 ## Model routing
 
@@ -40,8 +41,8 @@ Everything runs locally on your own Codex/ChatGPT seat: Claude calls OpenAI's fi
 | Hardest or still-unresolved work (escalation) | `gpt-6-astra` | `medium` |
 
 The normal default is **`gpt-6.1-sol/high`**. Raise the effort (`xhigh`, `max`) before reaching
-for Astra. `gpt-6-sol` (previous generation) and `gpt-5.6-*` (legacy) are used only on explicit
-request or when a 6.1 model is unavailable; hidden models are never used.
+for Astra. `gpt-6-sol` (previous generation) is used only when a 6.1 model is unavailable on your
+seat, and `gpt-5.6-*` (legacy) only on explicit request; hidden models are never used.
 
 ## Multi-turn stays supported
 
@@ -120,7 +121,8 @@ falling back to another one.
 
 `read-only` inspects. `workspace-write` allows edits in the working root.
 `danger-full-access` is never used unless explicitly requested. The sandbox is always passed
-explicitly (`-s` on `codex exec`, `-c sandbox_mode=...` on `resume`) because your
+explicitly (`-s` on `codex exec`; `-c 'sandbox_mode="..."'` on `resume` and `review`, which have
+no `-s`) because your
 `~/.codex/config.toml` defaults may be more permissive.
 
 ## License

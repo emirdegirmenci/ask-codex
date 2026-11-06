@@ -9,14 +9,15 @@ Codex CLI 0.160.1 removed the `codex mcp-server` subcommand, so the `mcp__codex_
 
 ### Changed
 - `ask-codex` skill: command templates built on `codex exec` (prompt via stdin from a temp file,
-  explicit `-s`, `-C`, `-o` for the final message, `--json` to capture the session id), multi-turn
+  explicit sandbox (`-s`, or `-c 'sandbox_mode=...'` on resume/review), `-C`, `-o` for the final message, `--json` to capture the session id), multi-turn
   via `codex exec resume <thread_id>`, and the native
   `codex exec review --uncommitted|--base|--commit` path for plain diff reviews. Flags that were
   not exercised are labelled unverified in the skill.
 - `codex-teammate` agent: uses Bash + `codex exec` / `codex exec resume` instead of MCP tools.
 - Model routing updated for the current catalogue: `gpt-6.1-sol/high` default, `gpt-6.1-terra`
   balanced, `gpt-6-luna` cheap/fast, `gpt-6-astra` for the hardest work; `gpt-6-sol` (previous
-  generation) and `gpt-5.6-*` (legacy) only on explicit request; hidden models never used.
+  generation) only when a 6.1 model is unavailable on the seat, `gpt-5.6-*` (legacy) only on explicit
+  request; hidden models never used.
   Efforts now include `max` and `ultra` where the model supports them.
 - `scripts/sync-models.py` and `MODELS.md` regenerated for the new slugs, status column and efforts.
 - Removed the MCP badge, the `claude mcp add codex` install step and the `mcp` keywords.

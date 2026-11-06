@@ -96,7 +96,7 @@ def render(cache: dict) -> str:
         f"> Source: `$CODEX_HOME/models_cache.json` · fetched `{fetched}` · Codex CLI `{client}`.",
         "",
         "ask-codex exposes only the user-facing models in its allowlist (hidden models are never used).",
-        "Pass the slug with `-m <slug>` and the effort with `-c model_reasoning_effort=\"<effort>\"` (a TOML value, keep the quotes).",
+        "Pass the slug with `-m <slug>` and the effort with `-c 'model_reasoning_effort=\"<effort>\"'` (a TOML value: single quotes around the whole argument).",
         "",
         "## Allowed models",
         "",
@@ -128,7 +128,7 @@ def render(cache: dict) -> str:
         "2. Use **`gpt-6.1-terra/high`** for well-scoped refactors/implementations where a balanced model is enough.",
         "3. Use **`gpt-6-luna/high`** for quick, cheap consults and easy mechanical tasks.",
         "4. Use **`gpt-6-astra/medium`** only for the hardest or still-unresolved work; try `xhigh` on the current model first.",
-        "5. `gpt-6-sol` (previous gen) and `gpt-5.6-*` (legacy) only on explicit request or if a 6.1 model is unavailable.",
+        "5. `gpt-6-sol` (previous gen) only when a 6.1 model is unavailable on the seat; `gpt-5.6-*` (legacy) only on explicit user request.",
         "6. If a model is unavailable on this seat, report that plainly; do not silently substitute another one.",
         "",
     ])

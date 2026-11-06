@@ -65,8 +65,11 @@ trivial work. This preserves the standing rule: *ask before calling; the user de
 exits with "stdin is not a terminal"), so 2.0.0 calls the CLI directly. Consequences, verified on
 0.160.1 / Windows:
 
-- Prompts go through stdin from a temp file (no argv length, quoting or non-ASCII path problems).
-- The sandbox is always explicit (`-s`; `-c sandbox_mode=` on `resume`) because the user's
+- Prompts go through stdin from a temp file written with the Write tool (no argv length, quoting,
+  heredoc-delimiter or non-ASCII path problems). Shell variables do not persist between Bash
+  calls, so the temp dir and thread id are printed and pasted literally into later calls.
+- The sandbox is always explicit (`-s` on `exec`; `-c 'sandbox_mode="..."'` on `resume` and
+  `review`, which have no `-s`) because the user's
   `config.toml` defaults may grant full access and the old MCP `sandbox` parameter is gone.
 - The final answer is read from `-o <file>`; the session id comes from the `thread_id` field of
   the first `--json` event (`thread.started`) and feeds `codex exec resume <id>` for multi-turn.

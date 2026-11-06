@@ -7,8 +7,8 @@ description: >-
   an OFFER (never a silent call) on high-stakes engineering decisions: architecture choices,
   irreversible/high-blast-radius changes, stubborn deep-debugging, a genuine fork between two
   strong approaches, or a security-critical diff. Delegates coding work to the local Codex CLI
-  (`codex exec`, run through Bash on the user's own seat). Runs entirely locally; no MCP server
-  and no third-party bridge code.
+  (`codex exec`, run through Bash on the user's own seat). Runs the local Codex CLI on the user's own seat (inference is done by
+  OpenAI's hosted models); no MCP server and no third-party bridge code.
 ---
 
 # ask-codex — delegate to OpenAI Codex through the CLI
@@ -22,41 +22,56 @@ Verified against `codex-cli 0.160.1` on Windows (Git Bash). Anything not run end
 
 ## Calling Codex: `codex exec`
 
-Always run Codex through Bash. Rules that apply to every call:
+Always run Codex through the **Bash tool** (Git Bash on Windows), not PowerShell: every template
+below is Bash. Rules that apply to every call:
 
-1. **Prompt goes through stdin from a temp file**, never as a long argv string (quoting, the
-   ~8k Windows command limit, non-ASCII paths such as `arşiv`). Write the file with a quoted
-   heredoc, then `... - < "$T/p.txt"`.
-2. **Always pass `-s` explicitly** on `codex exec`. The user's `~/.codex/config.toml` may default
-   to no approvals and full access, so relying on defaults is unsafe.
-3. **Always pass `-m` and `-c model_reasoning_effort="<effort>"`** (the value is TOML, keep the
-   quotes). Slugs and efforts come from [MODELS.md](MODELS.md).
-4. **Capture the answer with `-o <file>`** and read that file; do not scrape stdout. Redirect
+1. **Shell variables do not survive between Bash tool calls.** Pick a temp directory once
+   (e.g. `mktemp -d`, or your scratchpad), print it, and from then on paste the **literal path**
+   (and the literal thread id) into every later call. The templates below use `<T>` and `<ID>`
+   for those literals.
+2. **Write the prompt file with the Write tool** (`<T>/p.txt`), then feed it on stdin:
+   `... - < "<T>/p.txt"`. Never pass a long prompt as argv (quoting, the ~8k Windows command
+   limit, non-ASCII paths such as `arşiv`). A bash heredoc is only a fallback, and then use a
+   unique delimiter such as `CODEX_PROMPT_7f3a` (quoted, `<<'CODEX_PROMPT_7f3a'`) and check the
+   prompt text does not contain it; a line equal to the delimiter ends the heredoc and the rest
+   would run as shell commands. This matters when you paste raw material verbatim.
+3. **Always pass `-s` explicitly** on `codex exec`. The user's `~/.codex/config.toml` may default
+   to no approvals and full access, so relying on defaults is unsafe. `codex exec resume` and
+   `codex exec review` have no `-s`; there pass `-c 'sandbox_mode="<mode>"'` instead (verified
+   for `resume`; for `review` see below). Every exec, resume and review call carries an explicit
+   sandbox.
+4. **Always pass `-m` and `-c 'model_reasoning_effort="<effort>"'`**: single quotes around the whole
+   argument, because the value is TOML and needs its inner double quotes. Slugs and efforts come
+   from [MODELS.md](MODELS.md).
+5. **Capture the answer with `-o <file>`** and read that file; do not scrape stdout. Redirect
    stdout/stderr to files so they never flood the context.
-5. **Calls can take minutes.** Use the Bash tool with `run_in_background: true` (you are notified
+6. **Calls can take minutes.** Use the Bash tool with `run_in_background: true` (you are notified
    on exit) or a long `timeout`; do not poll.
-6. Set `PYTHONUTF8=1` if Codex or your own helper scripts will touch Python on Windows.
-7. `-C <dir>` sets Codex's working root (verified with a non-ASCII path). Add
+7. Set `PYTHONUTF8=1` if Codex or your own helper scripts will touch Python on Windows.
+8. `-C <dir>` sets Codex's working root (verified with a non-ASCII path). Add
    `--skip-git-repo-check` when the directory is not a git repo.
 
 ### Start a task (verified)
 
+First write `<T>/p.txt` with the Write tool (the four-part prompt, see "Prompt recipe"), then:
+
 ```bash
-T=$(mktemp -d)
-cat > "$T/p.txt" <<'EOF'
-<the four-part prompt, see "Prompt recipe">
-EOF
+T="<T>"
 PYTHONUTF8=1 codex exec \
-  -m gpt-6.1-sol -c model_reasoning_effort="high" \
+  -m gpt-6.1-sol -c 'model_reasoning_effort="high"' \
   -s read-only -C "<abs repo path>" --skip-git-repo-check \
   --json -o "$T/last.txt" - < "$T/p.txt" > "$T/events.jsonl" 2> "$T/err.txt"
-echo "exit=$?"; cat "$T/last.txt"
+echo "exit=$?"; echo "T=$T"
+sed -n 's/.*"type":"thread.started".*"thread_id":"\([^"]*\)".*/thread_id=\1/p' "$T/events.jsonl" | head -1
+cat "$T/last.txt"
 ```
 
-- The final reply is in `$T/last.txt`. Exit code `0` = turn completed.
+- The final reply is in `<T>/last.txt`. Exit code `0` = turn completed.
+- The command prints `T=...` and `thread_id=...`; **copy those literal values** into later calls.
 - `-s` is one of `read-only`, `workspace-write`, `danger-full-access` (see Methods).
-- Drop `--json` and `> events.jsonl` if you do not need the session id (single one-shot call).
-- Add `--ephemeral` for a one-shot you will never resume (nothing is persisted to disk).
+- Drop `--json`, the `sed` line and `> events.jsonl` if you will never resume.
+- Add `--ephemeral` for a one-shot you will never resume: Codex then does not persist its session
+  to disk (your temp files in `<T>` still exist; delete them if they hold sensitive text).
 - `--output-schema <file.json>` constrains the final message to a JSON Schema **(unverified)**.
 - `-i <image>` attaches an image **(unverified)**; `--add-dir <dir>` grants extra writable dirs
   **(unverified)**.
@@ -70,11 +85,7 @@ With `--json`, stdout is JSONL. The **first event** is:
 ```
 
 The field is **`thread_id`** on the `thread.started` event; that UUID is the `SESSION_ID` for
-`resume`. Extract it:
-
-```bash
-ID=$(sed -n 's/.*"type":"thread.started".*"thread_id":"\([^"]*\)".*/\1/p' "$T/events.jsonl" | head -1)
-```
+`resume`. The start template above prints it as `thread_id=<uuid>`; use that literal value as `<ID>`.
 
 Other events seen: `turn.started`, `item.completed` (with `item.type` `agent_message` carrying
 `text`, or `command_execution`), `turn.completed` (with token `usage`). Codex may also emit
@@ -84,35 +95,39 @@ run. Judge success by the exit code and `turn.completed`.
 
 ### Continue a conversation (verified)
 
+Write the follow-up to `<T>/p2.txt` with the Write tool, then (literal `<T>`, `<ID>`):
+
 ```bash
-cat > "$T/p2.txt" <<'EOF'
-<one focused follow-up>
-EOF
 cd "<abs repo path>"   # resume looks sessions up by cwd; there is no -C here
+T="<T>"
 PYTHONUTF8=1 codex exec resume \
-  -m gpt-6.1-sol -c model_reasoning_effort="high" \
-  -c sandbox_mode="read-only" --skip-git-repo-check \
-  --json -o "$T/last2.txt" "$ID" - < "$T/p2.txt" > "$T/events2.jsonl" 2> "$T/err2.txt"
+  -m gpt-6.1-sol -c 'model_reasoning_effort="high"' \
+  -c 'sandbox_mode="read-only"' --skip-git-repo-check \
+  --json -o "$T/last2.txt" "<ID>" - < "$T/p2.txt" > "$T/events2.jsonl" 2> "$T/err2.txt"
+echo "exit=$?"; cat "$T/last2.txt"
 ```
 
 Verified: the resumed turn kept the earlier context and reported the same `thread_id`.
 `codex exec resume` accepts `-m`, `-c`, `-i`, `--json`, `-o`, `--skip-git-repo-check`,
 `--ephemeral`, `--output-schema`, `--last`, `--all`; it **rejects `-s` and `-C`**
 (`unexpected argument`). Do **not** rely on the original sandbox being inherited: restate it with
-`-c sandbox_mode="<mode>"` on every resume (verified: `read-only` was enforced and a write was
+`-c 'sandbox_mode="<mode>"'` on every resume (verified: `read-only` was enforced and a write was
 denied). Use `--last` instead of an id only when you are sure no other Codex session ran in that
 directory. Resuming from a different cwd than the original run is **(unverified)**.
 `codex exec fork <SESSION_ID>` branches a session into a new one **(unverified)**.
 
 ### Native review (verified)
 
-For "review my diff" the CLI has a built-in reviewer:
+For "review my diff" the CLI has a built-in reviewer. It has no `-s`, so the sandbox is set with
+`-c` (`review` accepts `-c`; `-m`, `--json`, `-o`, `--skip-git-repo-check` too):
 
 ```bash
 cd "<abs repo path>"
+T="<T>"
 PYTHONUTF8=1 codex exec review --uncommitted \
-  -m gpt-6.1-sol -c model_reasoning_effort="high" \
+  -m gpt-6.1-sol -c 'model_reasoning_effort="high"' -c 'sandbox_mode="read-only"' \
   --json -o "$T/last.txt" > "$T/events.jsonl" 2> "$T/err.txt"
+echo "exit=$?"; cat "$T/last.txt"
 # other targets: --base <branch>   |   --commit <sha> [--title "<text>"]
 ```
 
@@ -120,8 +135,11 @@ PYTHONUTF8=1 codex exec review --uncommitted \
 - Verified: **a target flag cannot be combined with a `[PROMPT]`** (`--uncommitted`, `--base`,
   `--commit` each error with "cannot be used with `[PROMPT]`"). So the native path takes no
   custom instructions.
-- `codex exec review` has no `-s` and no `-C`; run it from inside the repo. It returns
-  severity-tagged findings (`[P1] ...` with file and line) in the `-o` file.
+- `codex exec review` has no `-s` and no `-C`; run it from inside the repo and always pass
+  `-c 'sandbox_mode="read-only"'` (a review must never get the user's full-access default). It
+  returns severity-tagged findings (`[P1] ...` with file and line) in the `-o` file. Verified: the command with both `-c` overrides runs and
+  exits 0; that `-c 'sandbox_mode=...'` is actually enforced on `review` was not tested separately
+  (it was on `resume`) **(unverified)**.
 - When you need a custom focus (auth only, migration safety, "findings only, ≤10 lines") use a
   normal `codex exec -s read-only` call with a review prompt instead (see Examples).
 
@@ -139,8 +157,8 @@ never invent slugs or efforts. Hidden models (`gpt-reserve`, `codex-auto-review`
 
 - Prefer raising effort on the current model (`high` → `xhigh` → `max`) before spending Astra.
   `ultra` exists on every model except Luna; use it only when asked.
-- `gpt-6-sol` (previous generation) only if a 6.1 model is unavailable on the seat;
-  `gpt-5.6-*` (legacy) only if the user explicitly asks for one.
+- `gpt-6-sol` (previous generation) **only when a 6.1 model is unavailable on the seat**;
+  `gpt-5.6-*` (legacy) **only on explicit user request**.
 - If a model is unavailable on the seat, say so plainly; do not silently substitute another.
 - Tell the user the selected model in one short line only when useful.
 
@@ -196,7 +214,7 @@ compatibility and missing tests. Do not waste tokens on praise or style nits unl
 Keep the same model for a conversation. A good loop is:
 
 - start with the routed model and `--json` to capture `thread_id`,
-- ask one focused follow-up with `codex exec resume "$ID" -`,
+- ask one focused follow-up with `codex exec resume <ID> -` (literal thread id),
 - if the result is still uncertain, start a **fresh** `codex exec` on the next route
   (Sol → Astra, or a higher effort) with a concise summary of the unresolved question.
 
@@ -213,17 +231,18 @@ instructions such as "do not summarize" take precedence.
 `read-only` for review/plan/consult. `workspace-write` only when edits are required.
 Never use `danger-full-access`, `--dangerously-bypass-approvals-and-sandbox`, or `--approve-for-me`
 unless the user explicitly requests it and understands the risk. Because `resume` has no `-s`,
-pass `-c sandbox_mode="<mode>"` there (see above).
+pass `-c 'sandbox_mode="<mode>"'` there, and on `codex exec review` (see above).
 
 ## Examples
 
-All examples assume `T=$(mktemp -d)` and the start-a-task command above; only the prompt file and
+All examples use the start-a-task command above with a literal `<T>`; only the prompt file and
 the `-m` / `-s` values differ.
 
 **Review current diff, native (default route)**
 ```bash
 cd "<abs repo path>" && codex exec review --uncommitted \
-  -m gpt-6.1-sol -c model_reasoning_effort="high" -o "$T/last.txt" > "$T/events.jsonl" 2> "$T/err.txt"
+  -m gpt-6.1-sol -c 'model_reasoning_effort="high"' -c 'sandbox_mode="read-only"' \
+  -o "<T>/last.txt" > "<T>/events.jsonl" 2> "<T>/err.txt"
 ```
 
 **Review with a custom focus — prompt file `p.txt`, `-s read-only`, `gpt-6.1-sol`/`high`**
