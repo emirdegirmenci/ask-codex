@@ -1,6 +1,6 @@
 # ask-codex — design
 
-Date: 2026-08-05
+Date: 2026-08-05 (updated 2026-11-06 for 2.0.0: CLI instead of MCP)
 
 ## Problem
 
@@ -24,7 +24,8 @@ The Codex CLI caches the models available on the user's seat in
 `$CODEX_HOME/models_cache.json`. Each entry carries `slug`, `visibility`,
 `supported_in_api`, `default_reasoning_level`, and the exact `supported_reasoning_levels`.
 `scripts/sync-models.py` reads that cache and rewrites `skills/ask-codex/MODELS.md`, keeping
-only user-facing models (`visibility == "list"` and `supported_in_api == true`). The committed
+only user-facing models (`visibility == "list"` and `supported_in_api == true`) that are in the
+script's allowlist; hidden models are never rendered. The committed
 `MODELS.md` is the shipped fallback for machines without a Codex cache. The script is a
 maintainer tool (`--check` mode makes it CI-friendly); it never fails the build when the cache
 is absent.
@@ -40,10 +41,11 @@ ask-codex/                          (public GitHub repo = single-plugin marketpl
 │   ├── SKILL.md                    when/how to delegate; proactive-offer rules; prompt recipe
 │   └── MODELS.md                   GENERATED from the Codex cache — source of truth for slugs
 ├── agents/
-│   └── codex-teammate.md           multi-turn Codex loop, isolated context, returns outcome only
+│   └── codex-teammate.md           multi-turn Codex loop (codex exec / resume), isolated context, returns outcome only
 ├── scripts/
 │   └── sync-models.py              cache → MODELS.md generator (+ --check)
 ├── docs/DESIGN.md                  this file
+├── CHANGELOG.md                    release notes + upgrade steps
 ├── README.md                       install, usage, discoverability (badges, topics)
 └── LICENSE                         MIT
 ```
@@ -55,6 +57,25 @@ high-blast-radius changes, stubborn deep-debugging, a genuine fork between stron
 security-critical diffs, Claude surfaces a **one-line offer** with a pre-picked model + effort and
 waits for a yes. It does not spend the user's Codex seat without consent, and it does not offer on
 trivial work. This preserves the standing rule: *ask before calling; the user decides.*
+
+## Transport: `codex exec` over Bash, not MCP
+
+1.x drove Codex through the `codex mcp-server` stdio server (`mcp__codex__codex` /
+`mcp__codex__codex-reply`). Codex CLI 0.160.1 removed that subcommand (it falls into the TUI and
+exits with "stdin is not a terminal"), so 2.0.0 calls the CLI directly. Consequences, verified on
+0.160.1 / Windows:
+
+- Prompts go through stdin from a temp file written with the Write tool (no argv length, quoting,
+  heredoc-delimiter or non-ASCII path problems). Shell variables do not persist between Bash
+  calls, so the temp dir and thread id are printed and pasted literally into later calls.
+- The sandbox is always explicit (`-s` on `exec`; `-c 'sandbox_mode="..."'` on `resume` and
+  `review`, which have no `-s`) because the user's
+  `config.toml` defaults may grant full access and the old MCP `sandbox` parameter is gone.
+- The final answer is read from `-o <file>`; the session id comes from the `thread_id` field of
+  the first `--json` event (`thread.started`) and feeds `codex exec resume <id>` for multi-turn.
+- `resume` and `review` accept fewer flags than `exec` (no `-s`/`-C`; `review` targets exclude a
+  prompt). The skill documents each limit rather than hiding it.
+- Calls are blocking shell commands that can take minutes, so they run in the background.
 
 ## Prompt quality
 
@@ -71,6 +92,6 @@ a tag is not required for marketplace installation.
 
 ## Non-goals
 
-- No third-party bridge; Codex runs on the user's own seat via `codex mcp-server`.
+- No third-party bridge and no MCP server; Codex runs on the user's own seat via `codex exec`.
 - No silent/auto invocation of Codex.
 - No editing of the user's other repositories.

@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "ask-codex",
-  "description": "A Claude Code plugin that turns OpenAI Codex into a teammate for code review, plan validation, refactors, and implementations with automatic GPT-6 routing.",
+  "description": "A Claude Code plugin that turns OpenAI Codex into a teammate for code review, plan validation, refactors, and implementations with automatic GPT-6.1 routing, driven through the Codex CLI.",
   "owner": {
     "name": "Emir Degirmenci",
     "url": "https://github.com/emirdegirmenci"
@@ -9,14 +9,14 @@
   "plugins": [
     {
       "name": "ask-codex",
-      "description": "Delegate coding work from Claude Code to OpenAI Codex with GPT-6 Luna by default, Sol for high-risk reasoning, and multi-turn codex-teammate loops when needed.",
-      "version": "1.1.1",
+      "description": "Delegate coding work from Claude Code to OpenAI Codex through the Codex CLI (codex exec) with GPT-6.1 Sol by default, Terra/Luna for cheaper work, Astra for the hardest cases, and multi-turn codex-teammate loops when needed.",
+      "version": "2.0.0",
       "source": "./",
       "category": "Developer Tools",
       "keywords": [
         "codex",
         "openai-codex",
-        "mcp",
+        "codex-cli",
         "code-review",
         "plan-review",
         "second-opinion",
